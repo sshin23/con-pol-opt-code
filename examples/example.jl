@@ -1,13 +1,15 @@
 using PolicyNLPModels, MatrixEquations, Random, LinearAlgebra, MadNLP, NLPModels
 
 Random.seed!(0)
+# Random.seed!()
 
 nx = 4
 nu = 2
 nξ = 4
-M  = 10
-N  = 10
+M  = 14
+N  = 40
 γ  = 0.99
+λ  = 1.
 
 A = [
     .8 -.1 0 0
@@ -22,28 +24,27 @@ B = [
     0 0
 ]
 C = I
+P = ared(A,B,I,I)[1]
+K = -inv(I+B'*P*B)*B'*P*A
 
-rew(x,u,ξ) = (1/2)*dot(x,x) + (1/2)*dot(u,u)
-dyn(x,u,ξ) = A*x + B*u + C*ξ
-pol = DensePolicy(tanh, [nx,nx+nu,nx+nu,nx+nu,nu])
-x0di() = randn(nx)
-ξdi() = randn(nξ)
-
-# nc = nx + nu 
+# rew(x,u,ξ) = (1/2)*dot(x,x) + (1/2)*dot(u,u)
+# dyn(x,u,ξ) = A*x + B*u + C*ξ
+# sigm(x) = x/(1+exp(-x))
+pol = DensePolicy(tanh, [nx,nx,nu], K)
+# x0di() = randn(nx) 
+# ξdi() = randn(nξ)
+# function con(x, u, ξ)
+#     u
+# end
 nc =  nu 
-function con(x, u, ξ)
-    u
-    # result[1:length(x)] .= x
-    # result[length(x)+1:length(x)+length(u)] .= u
-end
-gl =-.3*ones(nc)
-gu = .3*ones(nc)
 
-W = randn(PolicyNLPModels.get_W_dim(pol)) * 0.001
+gl =-.5*ones(nc)
+gu = .5*ones(nc)
+
+
+W = randn(PolicyNLPModels.get_W_dim(pol)) * 0.01
 x0s= [x0di() for i=1:M]
 ξs= [[ξdi() for k=1:N] for i=1:M]
-
-noise = randn(PolicyNLPModels.get_W_dim(pol)) * 0.1
 
 nlp = PolicyNLPModel(
     N,
@@ -53,15 +54,15 @@ nlp = PolicyNLPModel(
     dyn,
     pol;
     γ = γ,
-    λ = 1.0,
+    λ = λ,
     nc = nc,
     con = con,
     gl = gl,
     gu = gu
 )
 
-P = ared(A,B,I,I)[1]
-K=-inv(I+B'*P*B)*B'*P*A
+nlp.meta.x0 .= W
+
 
 nlp.meta.x0[1:length(K)] .= K[:]
 nlp.meta.x0[length(K)+1:end] .= randn(length(nlp.meta.x0) - length(K))
@@ -69,9 +70,10 @@ nlp.meta.x0[length(K)+1:end] .= randn(length(nlp.meta.x0) - length(K))
 solver = MadNLPSolver(
     nlp;
     kkt_system=MadNLP.DENSE_CONDENSED_KKT_SYSTEM,
-    tol = 1e-3,
+    tol = 1e-5,
     linear_solver=LapackCPUSolver,
-    lapack_algorithm=MadNLP.CHOLESKY
+    lapack_algorithm=MadNLP.CHOLESKY,
+    # inertia_correction_method = MadNLP.INERTIA_FREE
 )
 
 MadNLP.solve!(solver)
