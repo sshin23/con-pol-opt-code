@@ -7,8 +7,8 @@ nx = 3
 nu = 3
 nξ = 3
 
-M  = 50
-N  = 100
+M  = 100
+N  = 200
 γ  = 0.99
 λ  = .0
 
@@ -103,7 +103,7 @@ solver2 = solver
 Random.seed!(1)
 
 Tsim = 100
-Nsam = 20
+Nsam = 100
 
 W = solver.x[1:solver.nlp.meta.nvar]
 
@@ -168,21 +168,21 @@ rew_lqr, cvio_lqr = performance(
 )
 
 
-rew_mpc, cvio_mpc = performance(
-    rew,
-    dyn,
-    mpc,
-    con,
-    gl * 1.01,
-    gu * 1.01,
-    x0s,
-    ξs,
-    γ,
-    nx,
-    nu,
-    Tsim,
-    Nsam
-)
+# rew_mpc, cvio_mpc = performance(
+#     rew,
+#     dyn,
+#     mpc,
+#     con,
+#     gl * 1.01,
+#     gu * 1.01,
+#     x0s,
+#     ξs,
+#     γ,
+#     nx,
+#     nu,
+#     Tsim,
+#     Nsam
+# )
 
 show([rew_pol rew_lqr rew_mpc])
 show([cvio_pol cvio_lqr cvio_mpc])
