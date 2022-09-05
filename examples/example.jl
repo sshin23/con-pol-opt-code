@@ -8,8 +8,8 @@ nu = 3
 nξ = 3
 
 M  = 100
-N  = 200
-γ  = 0.99
+N  = 100
+γ  = 1.
 λ  = .0
 
 A = [
@@ -22,29 +22,60 @@ B = [
     0 1 0
     0 0 1
 ]
+Q = [
+    1 0 0
+    0 2 0
+    0 0 1
+]
+R = [
+    2 0 0
+    0 1 0
+    0 0 1
+]
 C = I
-P = ared(A,B,I,I)[1]
-K = -inv(I+B'*P*B)*B'*P*A
+E = [
+    1 -1 0
+    0 1 -1
+    0 0 0
+    0 0 0
+    0 0 0
+]
+F = [
+    0 0 0
+    0 0 0
+    1 0 0
+    0 1 0
+    0 0 1
+]
 
-rew(x,u,ξ) = (1/2)*dot(x,x) + (1/2)*dot(u,u)
+P = ared(sqrt(γ)*A,B,R/γ,Q)[1]
+K = -γ * inv(R+ γ * B'*P*B)*B'*P*A
+
+rew(x,u,ξ) = (1/2)*dot(x,Q,x) + (1/2)*dot(u,R,u)
 dyn(x,u,ξ) = A*x + B*u + C*ξ
 sigm(x) = x/(1+exp(-x))
 pol = DensePolicy(tanh, [nx,nx,nu], K)
 x0di() = 0.05 .* (rand(nx).*2 .-1) 
 ξdi() = 0.05 .* (rand(nξ).*2 .-1)
 function con(x, u, ξ)
-    [
-        x[1]-x[2];
-        x[2]-x[3];
-        u[1];
-        u[2];
-        u[3];
-    ]
+    return E*x + F*u
 end
 nc =  5
 
-gl =-.12*ones(nc)
-gu = .12*ones(nc)
+gl = [
+    -.30
+    -.30
+    -.03
+    -.03
+    -.03
+]
+gu = [
+    .30
+    .30
+    .03
+    .03
+    .03
+]
 
 
 x0s= [x0di() for i=1:M]
@@ -117,22 +148,62 @@ for k=1:Nsam
 end
 
 # mpc
-mpc = MPCPolicy(
-    10,
-    nx,
-    nu,
-    nξ,
-    rew,
-    dyn,
-    γ = γ,
-    con = con,
-    gl = gl,
-    gu = gu,
-    nc = nc,
-    jacobian_constant = true,
-    hessian_constant = true,
-    print_level=MadNLP.ERROR
-)
+# mpc = MPCPolicy(
+#     10,
+#     nx,
+#     nu,
+#     nξ,
+#     rew,
+#     dyn,
+#     γ = γ,
+#     con = con,
+#     gl = gl,
+#     gu = gu,
+#     nc = nc,
+#     jacobian_constant = true,
+#     hessian_constant = true,
+#     print_level=MadNLP.ERROR
+# )
+
+Nmpc = 20
+using JuMP, MadNLPHSL
+
+m = Model(MadNLP.Optimizer)
+
+set_optimizer_attribute(m, "linear_solver", Ma27Solver)
+set_optimizer_attribute(m, "max_iter", 10)
+set_optimizer_attribute(m, "print_level", MadNLP.ERROR)
+
+@variable(m, x[1:nx,1:Nmpc])
+@variable(m, u[1:nx,1:Nmpc])
+
+@objective(m, Min,
+           sum(γ^(t-1)* x[i,t]' * Q[i,j] * x[j,t] for i=1:nx for j=1:nx for t=1:Nmpc) + sum(γ^(t-1)* u[i,t]' * R[i,j] * u[j,t] for i=1:nu for j=1:nu for t=1:Nmpc) )
+# fix.(x[:,1], 0)
+@constraint(m, [i=1:nx], x[i,1] == 1e-9*i)
+@constraint(m, [i=1:nx,t=1:Nmpc-1], x[i,t+1] == sum(A[i,j]*x[j,t] for j=1:nx) + sum(B[i,j]*u[j,t] for j=1:nu))
+@constraint(m, [i=1:nc,t=1:Nmpc], gl[i] <= sum(E[i,j]*x[j,t] for j=1:nx) + sum(F[i,j]*u[j,t] for j=1:nu) <= gu[i])
+
+optimize!(m)
+mpc = m.moi_backend.optimizer.model.nlp.model.solver
+
+yind = [findfirst(mpc.rhs .== 1e-9*i) for i=1:nx]
+xind = [findfirst(mpc.x .== value(x[i])) for i=1:nx]
+uind = [findfirst(mpc.x .== value(u[i])) for i=1:nx]
+
+
+
+function MPCPolicy(mpc,xind,uind,nx,nu,N,x0)
+    mpc.cnt.k = 0
+    # fix.(m[:x][:,1],x)
+    # optimize!(m)
+    # value.(m[:u][:,1])
+    mpc.rhs[yind] .= x0
+    mpc.x[xind] .= x0
+    solve!(mpc)
+    # mpc.status == 1 ? print("/") : print("*") 
+    return mpc.status == MadNLP.SOLVE_SUCCEEDED ? mpc.x[uind] : K*x0
+end
 
 
 rew_pol, cvio_pol = performance(
@@ -168,21 +239,22 @@ rew_lqr, cvio_lqr = performance(
 )
 
 
-# rew_mpc, cvio_mpc = performance(
-#     rew,
-#     dyn,
-#     mpc,
-#     con,
-#     gl * 1.01,
-#     gu * 1.01,
-#     x0s,
-#     ξs,
-#     γ,
-#     nx,
-#     nu,
-#     Tsim,
-#     Nsam
-# )
+rew_mpc, cvio_mpc = performance(
+    rew,
+    dyn,
+    x->MPCPolicy(mpc,xind,uind,nx,nu,N,x),
+    con,
+    gl * 1.01,
+    gu * 1.01,
+    x0s,
+    ξs,
+    γ,
+    nx,
+    nu,
+    Tsim,
+    Nsam
+)
 
 show([rew_pol rew_lqr rew_mpc])
 show([cvio_pol cvio_lqr cvio_mpc])
+
