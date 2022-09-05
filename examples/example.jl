@@ -7,10 +7,10 @@ nx = 3
 nu = 3
 nξ = 3
 
-M  = 30
-N  = 50
+M  = 50
+N  = 100
 γ  = 0.99
-λ  = 1.
+λ  = .0
 
 A = [
     .9 -.05 0
@@ -29,7 +29,7 @@ K = -inv(I+B'*P*B)*B'*P*A
 rew(x,u,ξ) = (1/2)*dot(x,x) + (1/2)*dot(u,u)
 dyn(x,u,ξ) = A*x + B*u + C*ξ
 sigm(x) = x/(1+exp(-x))
-pol = DensePolicy(tanh, [nx,nx,nx,nu], K)
+pol = DensePolicy(tanh, [nx,nx,nu], K)
 x0di() = 0.05 .* (rand(nx).*2 .-1) 
 ξdi() = 0.05 .* (rand(nξ).*2 .-1)
 function con(x, u, ξ)
@@ -43,8 +43,8 @@ function con(x, u, ξ)
 end
 nc =  5
 
-gl =-.1*ones(nc)
-gu = .1*ones(nc)
+gl =-.12*ones(nc)
+gu = .12*ones(nc)
 
 
 x0s= [x0di() for i=1:M]
@@ -90,7 +90,7 @@ solver = MadNLPSolver(
     # kkt_system=MadNLP.DENSE_KKT_SYSTEM,
     kkt_system=MadNLP.DENSE_CONDENSED_KKT_SYSTEM,
     lapack_algorithm=MadNLP.CHOLESKY,
-    # tol = 1e-4,
+    tol = 1e-4,
     # max_iter=1,
     linear_solver=LapackCPUSolver,
     # nlp_scaling = false,
@@ -103,7 +103,7 @@ solver2 = solver
 Random.seed!(1)
 
 Tsim = 100
-Nsam = 10
+Nsam = 20
 
 W = solver.x[1:solver.nlp.meta.nvar]
 
@@ -118,7 +118,7 @@ end
 
 # mpc
 mpc = MPCPolicy(
-    N,
+    10,
     nx,
     nu,
     nξ,
@@ -140,8 +140,8 @@ rew_pol, cvio_pol = performance(
     dyn,
     x->pol(W,x),
     con,
-    gl * 1.0001,
-    gu * 1.0001,
+    gl * 1.01,
+    gu * 1.01,
     x0s,
     ξs,
     γ,
@@ -156,8 +156,8 @@ rew_lqr, cvio_lqr = performance(
     dyn,
     x->K*x,
     con,
-    gl * 1.0001,
-    gu * 1.0001,
+    gl * 1.01,
+    gu * 1.01,
     x0s,
     ξs,
     γ,
@@ -173,8 +173,8 @@ rew_mpc, cvio_mpc = performance(
     dyn,
     mpc,
     con,
-    gl * 1.0001,
-    gu * 1.0001,
+    gl * 1.01,
+    gu * 1.01,
     x0s,
     ξs,
     γ,
