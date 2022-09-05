@@ -3,43 +3,82 @@ using PolicyNLPModels, MatrixEquations, Random, LinearAlgebra, MadNLP, NLPModels
 Random.seed!(0)
 # Random.seed!()
 
-nx = 3
-nu = 3
-nξ = 3
-
-M  = 100
-N  = 100
-γ  = 1.
+M  = 50
+N  = 50
+γ  = .99
 λ  = .0
 
-A = [
+### A definition
+A11 = [
     .9 -.05 0
     -.05 .9 -.05 
     0 -.05 .9 
 ]
-B = [
+A12 = [
+    0.1 0
+    0.2 0
+    0.1 0  
+]
+A22 = exp([0 1; -1 0]*.3)
+
+A = [
+    A11 A12
+    zeros(size(A12))' A22
+]
+
+### B definition
+B1 = [
     1 0 0
     0 1 0
     0 0 1
 ]
-Q = [
+
+B = [B1; zeros(2,3)]
+
+### Q definition
+Q1 = [
     1 0 0
     0 2 0
     0 0 1
 ]
+
+Q = [
+    Q1 zeros(size(A12))
+    zeros(size(A12))' zeros(size(A22))
+]
+
+### R definition
 R = [
     2 0 0
     0 1 0
     0 0 1
 ]
-C = I
-E = [
+
+### C definition
+C2 = [
+    1 0
+    0 1
+]
+
+C  = [
+    zeros(size(A11,1),size(C2,2))
+    C2
+]
+
+### E definition
+E1 = [
     1 -1 0
     0 1 -1
     0 0 0
     0 0 0
     0 0 0
 ]
+
+E = [
+    E1 zeros(size(E1,1),size(A22,1))
+]
+
+### F definition
 F = [
     0 0 0
     0 0 0
@@ -47,20 +86,6 @@ F = [
     0 1 0
     0 0 1
 ]
-
-P = ared(sqrt(γ)*A,B,R/γ,Q)[1]
-K = -γ * inv(R+ γ * B'*P*B)*B'*P*A
-
-rew(x,u,ξ) = (1/2)*dot(x,Q,x) + (1/2)*dot(u,R,u)
-dyn(x,u,ξ) = A*x + B*u + C*ξ
-sigm(x) = x/(1+exp(-x))
-pol = DensePolicy(tanh, [nx,nx,nu], K)
-x0di() = 0.05 .* (rand(nx).*2 .-1) 
-ξdi() = 0.05 .* (rand(nξ).*2 .-1)
-function con(x, u, ξ)
-    return E*x + F*u
-end
-nc =  5
 
 gl = [
     -.30
@@ -76,6 +101,24 @@ gu = [
     .03
     .03
 ]
+
+P = ared(sqrt(γ)*A,B,R/γ,Q)[1]
+K = -γ * inv(R+ γ * B'*P*B)*B'*P*A
+
+nx = size(A,1)
+nu = size(B,2)
+nξ = size(C,2)
+nc = size(E,1)
+rew(x,u,ξ) = (1/2)*dot(x,Q,x) + (1/2)*dot(u,R,u)
+dyn(x,u,ξ) = A*x + B*u + C*ξ
+sigm(x) = x/(1+exp(-x))
+pol = DensePolicy(tanh, [nx,nx,nu], K)
+x0di() = 0.05 .* (rand(nx).*2 .-1) 
+ξdi() = 0.05 .* (rand(nξ).*2 .-1)
+function con(x, u, ξ)
+    return E*x + F*u
+end
+
 
 
 x0s= [x0di() for i=1:M]
@@ -189,7 +232,7 @@ mpc = m.moi_backend.optimizer.model.nlp.model.solver
 
 yind = [findfirst(mpc.rhs .== 1e-9*i) for i=1:nx]
 xind = [findfirst(mpc.x .== value(x[i])) for i=1:nx]
-uind = [findfirst(mpc.x .== value(u[i])) for i=1:nx]
+uind = [findfirst(mpc.x .== value(u[i])) for i=1:nu]
 
 
 
@@ -239,21 +282,21 @@ rew_lqr, cvio_lqr = performance(
 )
 
 
-rew_mpc, cvio_mpc = performance(
-    rew,
-    dyn,
-    x->MPCPolicy(mpc,xind,uind,nx,nu,N,x),
-    con,
-    gl * 1.01,
-    gu * 1.01,
-    x0s,
-    ξs,
-    γ,
-    nx,
-    nu,
-    Tsim,
-    Nsam
-)
+# rew_mpc, cvio_mpc = performance(
+#     rew,
+#     dyn,
+#     x->MPCPolicy(mpc,xind,uind,nx,nu,N,x),
+#     con,
+#     gl * 1.01,
+#     gu * 1.01,
+#     x0s,
+#     ξs,
+#     γ,
+#     nx,
+#     nu,
+#     Tsim,
+#     Nsam
+# )
 
 show([rew_pol rew_lqr rew_mpc])
 show([cvio_pol cvio_lqr cvio_mpc])
