@@ -59,9 +59,10 @@ function PolicyNLPModel(
     )
 end
 
-struct DensePolicy{F <: Function}
+struct DensePolicy{F <: Function, M}
     f::F
     dims::Vector{Int}
+    K::M
 end
 
 get_W_dim(pol) = sum((pol.dims[k]+1)*pol.dims[k+1] for k in 1:length(pol.dims)-1)
@@ -95,19 +96,19 @@ function (pol::DensePolicy{F})(W, x) where F
         end
     end
 
-    return xk
+    return xk .+ (pol.K * x)
 end
 
 
 function NLPModels.obj(nlp::PolicyNLPModel, W)
-    result = nlp.λ * sum(W.^2) * length(nlp.ξs)
-    for (x0,xi) in zip(nlp.x0s, nlp.ξs)
+    result = nlp.λ * sum(W.^2)
+    for (x0,ξ) in zip(nlp.x0s, nlp.ξs)
         xk = x0
         for k=1:nlp.N
             uk = nlp.pol(W,xk)
-            result += nlp.γ^(k-1) * nlp.rew(xk,uk,xi[k])
+            result += nlp.γ^(k-1) * nlp.rew(xk,uk,ξ[k]) / length(nlp.ξs)
             if k != nlp.N
-                xk = nlp.dyn(xk,uk,xi[k])
+                xk = nlp.dyn(xk,uk,ξ[k])
             end
         end
     end
@@ -116,7 +117,7 @@ function NLPModels.obj(nlp::PolicyNLPModel, W)
 end
 
 function NLPModels.cons(nlp::PolicyNLPModel, W::AbstractVector)
-    result  = []
+    result = []
     for (x0,ξ) in zip(nlp.x0s,nlp.ξs)
         xk = x0
         for k=1:nlp.N
@@ -130,6 +131,25 @@ function NLPModels.cons(nlp::PolicyNLPModel, W::AbstractVector)
     return result
 end
 
+function lag(nlp::PolicyNLPModel, W::AbstractVector, l, obj_weight)
+    cnt = 0
+    result = nlp.λ * sum(W.^2) * length(nlp.ξs)
+    for (x0,ξ) in zip(nlp.x0s,nlp.ξs)
+        xk = x0
+        for k=1:nlp.N
+            uk = nlp.pol(W,xk)
+            cnt += 1
+            result += dot(view(l, nlp.nc*(cnt-1)+1:nlp.nc*cnt), nlp.con(xk, uk, ξ[k])) / length(nlp.ξs)
+            result += obj_weight * nlp.γ^(k-1) * nlp.rew(xk,uk,ξ[k]) / length(nlp.ξs)
+            if k != nlp.N
+                xk = nlp.dyn(xk,uk,ξ[k])
+            end
+        end
+    end
+    return result
+end
+
+
 function NLPModels.cons!(nlp::AbstractNLPModel, W::AbstractVector, result::AbstractVector)
     result.= NLPModels.cons(nlp, W)
 end
@@ -142,8 +162,14 @@ function NLPModels.grad!(nlp::AbstractNLPModel, W, g)
     )
 end
 
+function MadNLP.hess_dense!(nlp::PolicyNLPModel, W, l, hess; obj_weight = 1.0)
+    ForwardDiff.hessian!(
+        hess,
+        x -> obj_weight * NLPModels.obj(nlp,x)  + l' * NLPModels.cons(nlp,x),
+        W
+        )
+end
 function MadNLP.hess_dense!(nlp::AbstractNLPModel, W, l, hess; obj_weight = 1.0)
-    
     ForwardDiff.hessian!(
         hess,
         x -> obj_weight * NLPModels.obj(nlp,x)  + l' * NLPModels.cons(nlp,x),
@@ -151,11 +177,11 @@ function MadNLP.hess_dense!(nlp::AbstractNLPModel, W, l, hess; obj_weight = 1.0)
     )
 end
 
+
 function MadNLP.jac_dense!(nlp::AbstractNLPModel, W, jac)
     ForwardDiff.jacobian!(
         jac,
-        (y,x) -> NLPModels.cons!(nlp, x, y),
-        nlp.g,
+        x -> NLPModels.cons(nlp, x),
         W
     )
 end
