@@ -334,7 +334,7 @@ function performance(
             xs[:,i+1] = dyn(xs[:,i], us[:,i], ξs[k][:,i])
             us[:,i+1] = pol(xs[:,i+1])
             rews[k] += γ^(i-1) * rew(xs[:,i], us[:,i], ξs[k][:,i])
-            cvio[k] += !all(gl .<= con(xs[:,i], us[:,i], ξs[k][:,i]) .<= gu)            
+            cvio[k] += !all(gl .<= con(xs[:,i], us[:,i], ξs[k][:,i]) .<= gu)
         end
         rews[k] += γ^Tsim * rew(xs[:,Tsim], us[:,Tsim], ξs[k][:,Tsim])
         cvio[k] += !all(gl .<= con(xs[:,Tsim], us[:,Tsim], ξs[k][:,Tsim]) .<= gu )
