@@ -3,8 +3,8 @@ using PolicyNLPModels, MatrixEquations, Random, LinearAlgebra, MadNLP, NLPModels
 Random.seed!(0)
 # Random.seed!()
 
-M  = 50
-N  = 50
+M  = 10
+N  = 10
 γ  = .99
 λ  = .0
 
@@ -55,20 +55,19 @@ R = [
 ]
 
 ### C definition
-C2 = [
+C  = [
     1 0
     0 1
-]
-
-C  = [
-    zeros(size(A11,1),size(C2,2))
-    C2
+    1 1
+    0 0
+    0 0
 ]
 
 ### E definition
 E1 = [
-    1 -1 0
-    0 1 -1
+    1 0 0
+    0 1 0
+    0 0 1
     0 0 0
     0 0 0
     0 0 0
@@ -82,6 +81,7 @@ E = [
 F = [
     0 0 0
     0 0 0
+    0 0 0
     1 0 0
     0 1 0
     0 0 1
@@ -90,11 +90,13 @@ F = [
 gl = [
     -.30
     -.30
+    -.30
     -.03
     -.03
     -.03
 ]
 gu = [
+    .30
     .30
     .30
     .03
@@ -282,21 +284,21 @@ rew_lqr, cvio_lqr = performance(
 )
 
 
-# rew_mpc, cvio_mpc = performance(
-#     rew,
-#     dyn,
-#     x->MPCPolicy(mpc,xind,uind,nx,nu,N,x),
-#     con,
-#     gl * 1.01,
-#     gu * 1.01,
-#     x0s,
-#     ξs,
-#     γ,
-#     nx,
-#     nu,
-#     Tsim,
-#     Nsam
-# )
+rew_mpc, cvio_mpc = performance(
+    rew,
+    dyn,
+    x->MPCPolicy(mpc,xind,uind,nx,nu,N,x),
+    con,
+    gl * 1.01,
+    gu * 1.01,
+    x0s,
+    ξs,
+    γ,
+    nx,
+    nu,
+    Tsim,
+    Nsam
+)
 
 show([rew_pol rew_lqr rew_mpc])
 show([cvio_pol cvio_lqr cvio_mpc])
