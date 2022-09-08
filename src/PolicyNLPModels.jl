@@ -96,7 +96,7 @@ function (pol::DensePolicy{F})(W, x) where F
         end
     end
 
-    return xk .+ (pol.K * x)
+    return xk 
 end
 
 
