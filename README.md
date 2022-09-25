@@ -1,4 +1,4 @@
-# con-pol-opt
+# con-pol-opt-code
 This repository is the code for the case study in "Constrained Policy Optimization for Stochastic Optimal Control under" by Sungho Shin, Francois Pacaud, and Mihai Anitescu.
 
 ## How to run
