@@ -1,4 +1,4 @@
-module PolicyNLPModels
+module PolicyOptimization
 
 using ForwardDiff, LinearAlgebra, NLPModels, MadNLP, Random, Statistics
 
@@ -66,17 +66,11 @@ struct DensePolicy{F <: Function, M}
 end
 
 get_W_dim(pol) = sum((pol.dims[k]+1)*pol.dims[k+1] for k in 1:length(pol.dims)-1)
-# + pol.dims[end] * pol.dims[1]
 
 function (pol::DensePolicy{F})(W, x) where F
 
     @assert length(W) == get_W_dim(pol)
 
-    # dim1 = pol.dims[1]
-    # dim2 = pol.dims[end]
-    # A = reshape(@view(W[1: dim2*dim1]), dim2, dim1)
-    # offset = pol.dims[end] * pol.dims[1]
-    # xlin = A*x
     offset = 0
 
     xk = x
@@ -96,7 +90,7 @@ function (pol::DensePolicy{F})(W, x) where F
         end
     end
 
-    return xk .+ (pol.K * x)
+    return xk 
 end
 
 
@@ -238,72 +232,19 @@ function NLPModels.cons(nlp::MPCModel, v::AbstractVector)
 end
 
 
-
-struct MPCPolicy
-    solver
+function MPCPolicy(mpc,xind,uind,nx,nu,x0)
+    mpc.cnt.k = 0
+    if all( xl .<= x0[1:length(xl)] .<= xu)
+        mpc.rhs[yind] .= x0
+        mpc.x[xind] .= x0
+        solve!(mpc)
+        mpc.status == MadNLP.SOLVE_SUCCEEDED ? print("/") : print("*") 
+        return mpc.status == MadNLP.SOLVE_SUCCEEDED ? mpc.x[uind] : min.(max.(K*x0,ul),uu)
+    else
+        print("!")
+        return min.(max.(K*x0,ul),uu)
+    end
 end
-
-function MPCPolicy(
-    N,
-    nx,
-    nu,
-    nξ,
-    rew::R,
-    dyn::D;
-    γ::Float64 = 1.,
-    con::C = (x,u,ξ) -> nothing,
-    gl::V = Float64[],
-    gu::V = Float64[],
-    nc = length(gl),
-    kwargs...
-    ) where {V <: AbstractVector{Float64}, R, D, C}
-    
-    ξ0= zeros(nξ)
-    
-    nlp = MPCModel(
-        N,
-        nx,
-        nu,
-        nξ,
-        zeros(nx),
-        γ,
-        (x,u)->rew(x,u,ξ0),
-        (x,u)->dyn(x,u,ξ0),
-        (x,u)->con(x,u,ξ0),
-        V(undef,(nx + nc) * N),
-        NLPModelMeta{Float64, Vector{Float64}}(
-            (nx + nu) * N;
-            ncon = (nx + nc) * N,
-            lcon = [ zeros(nx*(N)); repeat(gl, N)],
-            ucon = [ zeros(nx*(N)); repeat(gu, N)]
-        ),
-        NLPModels.Counters()
-    )
-
-    return MPCPolicy(
-        MadNLPSolver(
-            nlp;
-            kkt_system=MadNLP.DENSE_KKT_SYSTEM,
-            tol = 1e-3,
-            linear_solver=LapackCPUSolver,
-            max_iter=999999,
-            max_wall_time=Inf,
-            kwargs...
-        )
-    )    
-end
-
-function (mpc::MPCPolicy)(x0)
-    nx = mpc.solver.nlp.nx
-    nu = mpc.solver.nlp.nu
-    N = mpc.solver.nlp.N
-    
-    mpc.solver.rhs[1:nx] .= x0
-    mpc.solver.x[1:nx] .= x0
-    solve!(mpc.solver)
-    return mpc.solver.x[nx*N+1:nx*N+nu]
-end
-
 
 function performance(
     rew,
