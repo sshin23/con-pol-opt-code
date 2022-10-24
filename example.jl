@@ -206,7 +206,7 @@ uind = [findfirst(mpc.x .== value(u[i])) for i=1:nu]
 rew_mpc, cvio_mpc = performance(
     rew,
     dyn,
-    x-> MPCPolicy(mpc,xind,uind,nx,nu,x),
+    x-> MPCPolicy(mpc,xind,uind,yind,nx,nu,x,xl,xu),
     con,
     gl * 1.00,
     gu * 1.00,
@@ -300,7 +300,7 @@ for M in [5 10 15 20]
             xmpc[:,1] .= x0s[k]
             upol[:,1] .= pol(W,xpol[:,1])
             ulqr[:,1] .= min.(max.(K*xlqr[:,1],ul),uu)
-            umpc[:,1] .= MPCPolicy(mpc,xind,uind,nx,nu,xmpc[:,1])
+            umpc[:,1] .= MPCPolicy(mpc,xind,uind,yind,nx,nu,xmpc[:,1],xl,xu)
             
             for i=2:Tsim
                 xpol[:,i] .= dyn(xpol[:,i-1],upol[:,i-1],ξs[k][:,i-1])
@@ -308,7 +308,7 @@ for M in [5 10 15 20]
                 xmpc[:,i] .= dyn(xmpc[:,i-1],umpc[:,i-1],ξs[k][:,i-1])
                 upol[:,i] .= pol(W,xpol[:,i])
                 ulqr[:,i] .= min.(max.(K*xlqr[:,i],ul),uu)
-                umpc[:,i] .= MPCPolicy(mpc,xind,uind,nx,nu,xmpc[:,i])
+                umpc[:,i] .= MPCPolicy(mpc,xind,uind,yind,nx,nu,xmpc[:,i],xl,xu)
             end
 
             for i=1:3
