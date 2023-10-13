@@ -1,6 +1,6 @@
 include("PolicyOptimization.jl")
 
-using .PolicyOptimization, MatrixEquations, Random, LinearAlgebra, NLPModels, JuMP, MadNLP, MadNLPHSL, LaTeXStrings, Plots
+using MatrixEquations, Random, LinearAlgebra, NLPModels, JuMP, MadNLP, LaTeXStrings, Plots
 
 
 Random.seed!(0)
@@ -178,9 +178,6 @@ Nmpc = 20
 
 m = Model(MadNLP.Optimizer)
 
-if @isdefined(Ma27Solver)
-    set_optimizer_attribute(m, "linear_solver", Ma27Solver)
-end
 set_optimizer_attribute(m, "max_iter", 20)
 set_optimizer_attribute(m, "print_level", MadNLP.ERROR)
 
@@ -200,8 +197,8 @@ optimize!(m)
 mpc = m.moi_backend.optimizer.model.nlp.model.solver
 
 yind = [findfirst(mpc.rhs .== 1e-9*i) for i=1:nx]
-xind = [findfirst(mpc.x .== value(x[i])) for i=1:nx]
-uind = [findfirst(mpc.x .== value(u[i])) for i=1:nu]
+xind = [findfirst(mpc.x.values .== value(x[i])) for i=1:nx]
+uind = [findfirst(mpc.x.values .== value(u[i])) for i=1:nu]
 
 rew_mpc, cvio_mpc = performance(
     rew,
@@ -259,7 +256,7 @@ for M in [5 10 15 20]
         MadNLP.solve!(solver)
 
 
-        W = solver.x[1:solver.nlp.meta.nvar]
+        W = solver.x.values[1:solver.nlp.meta.nvar]
         
 
         rew_pol, cvio_pol = performance(

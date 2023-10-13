@@ -1,5 +1,3 @@
-module PolicyOptimization
-
 using ForwardDiff, LinearAlgebra, NLPModels, MadNLP, Random, Statistics
 
 export PolicyNLPModel, DensePolicy, performance, MPCPolicy
@@ -236,10 +234,10 @@ function MPCPolicy(mpc,xind,uind,yind,nx,nu,x0,xl,xu)
     mpc.cnt.k = 0
     if all( xl .<= x0[1:length(xl)] .<= xu)
         mpc.rhs[yind] .= x0
-        mpc.x[xind] .= x0
+        mpc.x.values[xind] .= x0
         solve!(mpc)
         mpc.status == MadNLP.SOLVE_SUCCEEDED ? print("/") : print("*") 
-        return mpc.status == MadNLP.SOLVE_SUCCEEDED ? mpc.x[uind] : min.(max.(K*x0,ul),uu)
+        return mpc.status == MadNLP.SOLVE_SUCCEEDED ? mpc.x.values[uind] : min.(max.(K*x0,ul),uu)
     else
         print("!")
         return min.(max.(K*x0,ul),uu)
@@ -283,5 +281,3 @@ function performance(
 
     return mean(rews), mean(cvio)
 end
-
-end # module
