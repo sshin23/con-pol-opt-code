@@ -1,6 +1,6 @@
 include("PolicyOptimization.jl")
 
-using .PolicyOptimization, MatrixEquations, Random, LinearAlgebra, NLPModels, JuMP, MadNLP, MadNLPHSL, LaTeXStrings, Plots
+using .PolicyOptimization, MatrixEquations, Random, LinearAlgebra, NLPModels, JuMP, MadNLP, LaTeXStrings, Plots
 
 
 Random.seed!(0)
@@ -9,9 +9,9 @@ Random.seed!(0)
 
 ### A definition
 A11 = [
-    .9 -.05 0
-    -.05 .9 -.05 
-    0 -.05 .9 
+    1.1 -.05 0
+    -.05 1.1 -.05 
+    0 -.05 1.1 
 ]
 A12 = [
     0.1 0
@@ -109,9 +109,9 @@ uu = [
     .03
 ]
 xl = [
-    -.10
-    -.10
-    -.10
+    -.05
+    -.05
+    -.05
 ]
 xu = [
     .10
@@ -178,9 +178,9 @@ Nmpc = 20
 
 m = Model(MadNLP.Optimizer)
 
-if @isdefined(Ma27Solver)
-    set_optimizer_attribute(m, "linear_solver", Ma27Solver)
-end
+# if @isdefined(Ma27Solver)
+#     set_optimizer_attribute(m, "linear_solver", Ma27Solver)
+# end
 set_optimizer_attribute(m, "max_iter", 20)
 set_optimizer_attribute(m, "print_level", MadNLP.ERROR)
 
@@ -200,13 +200,13 @@ optimize!(m)
 mpc = m.moi_backend.optimizer.model.nlp.model.solver
 
 yind = [findfirst(mpc.rhs .== 1e-9*i) for i=1:nx]
-xind = [findfirst(mpc.x .== value(x[i])) for i=1:nx]
-uind = [findfirst(mpc.x .== value(u[i])) for i=1:nu]
+xind = [findfirst(mpc.x.values .== value(x[i])) for i=1:nx]
+uind = [findfirst(mpc.x.values .== value(u[i])) for i=1:nu]
 
 rew_mpc, cvio_mpc = performance(
     rew,
     dyn,
-    x-> MPCPolicy(mpc,xind,uind,yind,nx,nu,x,xl,xu),
+    x-> MPCPolicy(K,mpc,xind,uind,yind,nx,nu,x,xl,xu,ul,uu),
     con,
     gl * 1.00,
     gu * 1.00,
@@ -300,7 +300,7 @@ for M in [5 10 15 20]
             xmpc[:,1] .= x0s[k]
             upol[:,1] .= pol(W,xpol[:,1])
             ulqr[:,1] .= min.(max.(K*xlqr[:,1],ul),uu)
-            umpc[:,1] .= MPCPolicy(mpc,xind,uind,yind,nx,nu,xmpc[:,1],xl,xu)
+            umpc[:,1] .= MPCPolicy(K,mpc,xind,uind,yind,nx,nu,xmpc[:,1],xl,xu,ul,uu)
             
             for i=2:Tsim
                 xpol[:,i] .= dyn(xpol[:,i-1],upol[:,i-1],ξs[k][:,i-1])
@@ -308,7 +308,7 @@ for M in [5 10 15 20]
                 xmpc[:,i] .= dyn(xmpc[:,i-1],umpc[:,i-1],ξs[k][:,i-1])
                 upol[:,i] .= pol(W,xpol[:,i])
                 ulqr[:,i] .= min.(max.(K*xlqr[:,i],ul),uu)
-                umpc[:,i] .= MPCPolicy(mpc,xind,uind,yind,nx,nu,xmpc[:,i],xl,xu)
+                umpc[:,i] .= MPCPolicy(K,mpc,xind,uind,yind,nx,nu,xmpc[:,i],xl,xu,ul,uu)
             end
 
             for i=1:3

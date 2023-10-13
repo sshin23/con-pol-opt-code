@@ -232,7 +232,7 @@ function NLPModels.cons(nlp::MPCModel, v::AbstractVector)
 end
 
 
-function MPCPolicy(mpc,xind,uind,yind,nx,nu,x0,xl,xu)
+function MPCPolicy(K,mpc,xind,uind,yind,nx,nu,x0,xl,xu,ul,uu)
     mpc.cnt.k = 0
     if all( xl .<= x0[1:length(xl)] .<= xu)
         mpc.rhs[yind] .= x0
